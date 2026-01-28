@@ -1,0 +1,38 @@
+# CMI Discord Bot - systemd service file
+# Copy this to: /etc/systemd/system/cmi-bot.service
+#
+# Installation commands:
+#   sudo cp deployment/cmi-bot.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable cmi-bot
+#   sudo systemctl start cmi-bot
+#
+# Useful commands:
+#   sudo systemctl status cmi-bot    # Check status
+#   sudo systemctl restart cmi-bot   # Restart bot
+#   sudo systemctl stop cmi-bot      # Stop bot
+#   sudo journalctl -u cmi-bot -f    # View live logs
+
+[Unit]
+Description=CMI Discord Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/CMI-disc-bot
+ExecStart=/usr/bin/python3 /home/ubuntu/CMI-disc-bot/bot.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/ubuntu/CMI-disc-bot/bot.log
+StandardError=append:/home/ubuntu/CMI-disc-bot/bot.log
+
+# Environment variables
+Environment="DISCORD_TOKEN=your_token_here"
+
+# Resource limits (optional - prevents runaway memory usage)
+MemoryMax=256M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

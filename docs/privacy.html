@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - CMI Discord Bot</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Privacy Policy</h1>
+            <p><a href="index.html" class="back-link">← Back to Home</a></p>
+        </header>
+        
+        <div class="content">
+            <p class="last-updated"><strong>Last Updated:</strong> January 24, 2026</p>
+            
+            <div id="markdown-content"></div>
+        </div>
+        
+        <footer>
+            <p><a href="index.html">Home</a> | <a href="tos.html">Terms of Service</a></p>
+            <p>&copy; 2026 CMI Discord Bot</p>
+        </footer>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        // Fetch and render markdown
+        fetch('../PRIVACY_POLICY.md')
+            .then(response => response.text())
+            .then(text => {
+                document.getElementById('markdown-content').innerHTML = marked.parse(text);
+            });
+    </script>
+</body>
+</html>

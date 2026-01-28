@@ -1,0 +1,7 @@
+cmi.db
+.env
+*.log
+backups/
+__pycache__/
+*.pyc
+.DS_Store

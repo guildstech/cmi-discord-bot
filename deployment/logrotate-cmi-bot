@@ -1,0 +1,24 @@
+# CMI Bot Log Rotation Configuration
+# Copy this to: /etc/logrotate.d/cmi-bot
+#
+# Installation command:
+#   sudo cp deployment/logrotate-cmi-bot /etc/logrotate.d/cmi-bot
+#
+# Test configuration:
+#   sudo logrotate -d /etc/logrotate.d/cmi-bot  # Dry run
+#   sudo logrotate -f /etc/logrotate.d/cmi-bot  # Force rotation
+
+/home/ubuntu/CMI-disc-bot/bot.log {
+    daily                   # Rotate daily
+    rotate 7                # Keep 7 days of logs
+    compress                # Compress old logs with gzip
+    delaycompress           # Don't compress the most recent old log
+    missingok               # Don't error if log file is missing
+    notifempty              # Don't rotate if log is empty
+    create 0644 ubuntu ubuntu  # Create new log with these permissions
+    sharedscripts           # Run postrotate script only once
+    postrotate
+        # Tell systemd service to reopen log file
+        systemctl reload-or-restart cmi-bot > /dev/null 2>&1 || true
+    endscript
+}
