@@ -9,7 +9,7 @@ By inviting and using the CMI Discord Bot ("the Bot") in your Discord server, yo
 ## 2. Description of Service
 
 The CMI Bot provides absence management and tracking features for Discord servers, including:
-- Creating and managing Check Me In (CMI) entries for user absences
+- Creating and managing CMI/absence entries for user absences
 - Automated role assignment and nickname prefixing
 - Daily automated reports (optional)
 - Data export functionality
