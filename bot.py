@@ -13,6 +13,17 @@ import asyncio
 import sqlite3
 import os
 import re
+from pathlib import Path
+
+# Load environment variables from .env file (if exists)
+env_path = Path(__file__).parent / ".env"
+if env_path.exists():
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                os.environ[key.strip()] = value.strip()
 import traceback
 import logging
 import signal
@@ -56,10 +67,11 @@ if not TOKEN:
 # ============================================================
 # Bot Owner IDs (for broadcast feature)
 # ============================================================
-# IMPORTANT: Replace the None in the list with YOUR Discord User ID
+# IMPORTANT: Set as environment variable (comma-separated for multiple owners)
 # To find your ID: Enable Developer Mode in Discord → Right-click your name → Copy ID
-# You can add multiple IDs: [123456789012345678, 987654321098765432]
-OWNER_IDS = [490452412193046529]  # Your Discord user ID
+# Example: DISCORD_OWNER_IDS="123456789012345678,987654321098765432"
+OWNER_IDS_STR = os.environ.get("DISCORD_OWNER_IDS", "")
+OWNER_IDS = [int(id.strip()) for id in OWNER_IDS_STR.split(",") if id.strip()]
 
 
 # ============================================================
