@@ -1003,7 +1003,7 @@ async def daily_report_task():
 
         # Generate and send report
         try:
-            report_content = await generate_daily_cmi_report(guild_id, server_tz)
+            report_content = await generate_daily_cmi_report(guild, server_tz)
             if report_content:
                 await channel.send(report_content)
                 logging.info(f"Sent daily CMI report to {guild.name} (#{channel.name})")
@@ -1011,7 +1011,7 @@ async def daily_report_task():
             logging.error(f"Failed to send daily CMI report to {guild.name}: {e}")
 
 
-async def generate_daily_cmi_report(guild_id: int, server_tz: ZoneInfo) -> str:
+async def generate_daily_cmi_report(guild: discord.Guild, server_tz: ZoneInfo) -> str:
     """
     Generate a daily CMI report showing current and upcoming CMIs for the next 7 days.
     Returns a formatted string message.
@@ -1030,7 +1030,7 @@ async def generate_daily_cmi_report(guild_id: int, server_tz: ZoneInfo) -> str:
         AND (return_dt IS NULL OR return_dt >= ?)
         ORDER BY leave_dt ASC
         """,
-        (guild_id, end_date.isoformat(), now.isoformat()),
+        (guild.id, end_date.isoformat(), now.isoformat()),
     )
     rows = cur.fetchall()
     conn.close()
@@ -1054,7 +1054,18 @@ async def generate_daily_cmi_report(guild_id: int, server_tz: ZoneInfo) -> str:
         leave_str = leave_local.strftime("%d/%m/%Y %H:%M")
         return_str = return_local.strftime("%d/%m/%Y %H:%M") if return_local else "Until further notice"
 
-        lines.append(f"• <@{user_id}>: {leave_str} → {return_str}")
+        # Get member info without tagging
+        member = guild.get_member(user_id)
+        if member:
+            # Show nickname if set, otherwise username
+            display_name = member.display_name
+            username = f"@{member.name}"
+            user_display = f"{display_name} ({username})"
+        else:
+            # User left the server
+            user_display = f"User ID: {user_id}"
+
+        lines.append(f"• {user_display}: {leave_str} → {return_str}")
         lines.append(f"  *Reason:* {reason}")
 
     return "\n".join(lines)
@@ -3846,7 +3857,7 @@ class LeadershipToolsView(discord.ui.View):
         
         # Generate and send report
         try:
-            report_content = await generate_daily_cmi_report(self.guild_id, server_tz)
+            report_content = await generate_daily_cmi_report(interaction.guild, server_tz)
             if report_content:
                 await channel.send(report_content)
                 await interaction.followup.send(
