@@ -1176,8 +1176,13 @@ async def generate_csv_export(guild: discord.Guild) -> discord.File:
 # ------------------------------------------------------------
 # Date Parsing
 # ------------------------------------------------------------
-def parse_date(date_str: str | None):
-    """Parse flexible date formats into a date object."""
+def parse_date(date_str: str | None, tz_info: ZoneInfo | None = None):
+    """Parse flexible date formats into a date object.
+    
+    Args:
+        date_str: The date string to parse
+        tz_info: The timezone to use for 'today' and 'tomorrow' calculations
+    """
     if not date_str:
         return None
 
@@ -1186,10 +1191,14 @@ def parse_date(date_str: str | None):
     # Handle "Today" and "Tomorrow" (case-insensitive)
     date_str_lower = date_str.lower()
     if date_str_lower == "today":
-        result = datetime.now().date()
+        # Use timezone-aware now if timezone provided, otherwise use naive
+        now = datetime.now(tz_info) if tz_info else datetime.now()
+        result = now.date()
         return result
     elif date_str_lower == "tomorrow":
-        result = (datetime.now() + timedelta(days=1)).date()
+        # Use timezone-aware now if timezone provided, otherwise use naive
+        now = datetime.now(tz_info) if tz_info else datetime.now()
+        result = (now + timedelta(days=1)).date()
         return result
     
     # Title case for month names
@@ -2350,7 +2359,7 @@ class CMIEditModal(discord.ui.Modal):
                 
                 # Leave date: if provided, parse it; if empty, use today
                 if leave_date_input:
-                    parsed_ld = parse_date(leave_date_input)
+                    parsed_ld = parse_date(leave_date_input, tz_info)
                     if not parsed_ld:
                         conn.close()
                         return await interaction.response.send_message(
@@ -2390,7 +2399,7 @@ class CMIEditModal(discord.ui.Modal):
                 
                 # Return date: if provided, parse it; if empty, use leave date
                 if return_date_input:
-                    parsed_rd = parse_date(return_date_input)
+                    parsed_rd = parse_date(return_date_input, tz_info)
                     if not parsed_rd:
                         conn.close()
                         return await interaction.response.send_message(
@@ -3977,7 +3986,7 @@ class CMI(commands.Cog):
             leave_dt = datetime.now(tz_info)
         else:
             # Parse leave date/time
-            ld = parse_date(leave_date) if leave_date else None
+            ld = parse_date(leave_date, tz_info) if leave_date else None
             lt = parse_time(leave_time) if leave_time else None
 
             if leave_date and not ld:
@@ -4015,7 +4024,7 @@ class CMI(commands.Cog):
             return_dt = None
         else:
             # Parse return date/time
-            rd = parse_date(return_date) if return_date else None
+            rd = parse_date(return_date, tz_info) if return_date else None
             rt = parse_time(return_time) if return_time else None
 
             if return_date and not rd:
