@@ -2422,7 +2422,7 @@ class CMIEditModal(discord.ui.Modal):
                     # User deleted the date field = default to leave date
                     rd = leave_dt.date()
 
-                # Return time: if provided, parse it; if empty, use 23:59
+                # Return time: if provided, parse it; if empty, use 00:00
                 if return_time_input:
                     parsed_rt = parse_time(return_time_input)
                     if not parsed_rt:
@@ -2433,8 +2433,8 @@ class CMIEditModal(discord.ui.Modal):
                         )
                     rt = parsed_rt
                 else:
-                    # User deleted the time field = default to 23:59
-                    rt = time(23, 59)
+                    # User deleted the time field = default to 00:00 (start of day)
+                    rt = time(0, 0)
 
                 return_dt = datetime.combine(rd, rt).replace(tzinfo=tz_info)
             else:
@@ -4053,13 +4053,9 @@ class CMI(commands.Cog):
             if rt and not rd:
                 rd = leave_dt.date()
             
-            # If date is "tomorrow" with no time, default to 00:00 (start of day)
-            # Otherwise, default to 23:59 (end of day)
+            # If no return time provided, default to 00:00 (start of day)
             if rd and not rt:
-                if return_date and return_date.lower() == "tomorrow":
-                    rt = time(0, 0)
-                else:
-                    rt = time(23, 59)
+                rt = time(0, 0)
 
             if rd:
                 return_dt = datetime.combine(rd, rt).replace(tzinfo=tz_info)
