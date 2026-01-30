@@ -502,12 +502,36 @@ async def enforce_cmi_channel(interaction: discord.Interaction) -> bool:
     """
     Returns True if the command is allowed to continue.
     Returns False if the user is in the wrong channel and an error was sent.
+    
+    If the configured CMI channel was deleted, finds a fallback channel and notifies leadership.
     """
     if not interaction.guild:
         return True
 
     allowed_id = get_cmi_channel_id(interaction.guild.id)
     if not allowed_id:
+        return True
+    
+    # Check if configured channel still exists
+    allowed_channel = interaction.guild.get_channel(allowed_id)
+    if not allowed_channel:
+        # CMI channel was deleted, find fallback and notify
+        fallback = None
+        for ch in interaction.guild.text_channels:
+            if ch.permissions_for(interaction.guild.me).send_messages:
+                fallback = ch
+                break
+        
+        if fallback:
+            # Notify leadership about the fallback
+            if await is_leadership(interaction):
+                await interaction.followup.send(
+                    f"⚠️ **Notice**: The configured CMI channel was deleted. "
+                    f"Please reconfigure it with `/cmi leadership`. "
+                    f"Commands are temporarily allowed in all channels.",
+                    ephemeral=True
+                )
+        # Allow command to proceed since channel was deleted
         return True
 
     if interaction.channel and interaction.channel.id == allowed_id:
@@ -875,11 +899,22 @@ async def away_role_sync_task():
             if leave_local <= now and (return_local is None or return_local >= now):
                 should_have_role.add(uid)
 
-        # Apply changes
-        for member in guild.members:
+        # Get all members who currently have the role
+        members_with_role = [m for m in guild.members if role in m.roles]
+        
+        # Build set of user IDs from CMI list and members with role
+        all_relevant_user_ids = should_have_role | {m.id for m in members_with_role}
+        
+        prefix = get_nickname_prefix(guild.id)
+        
+        # Only check members who are in CMI list or currently have the role
+        for user_id in all_relevant_user_ids:
+            member = guild.get_member(user_id)
+            if not member:
+                continue
+            
             has = role in member.roles
-            should = member.id in should_have_role
-            prefix = get_nickname_prefix(guild.id)
+            should = user_id in should_have_role
 
             if should and not has:
                 try:
@@ -991,14 +1026,34 @@ async def daily_report_task():
         if now.hour != report_hour:
             continue
 
-        # Determine target channel (use CMI channel if not set)
+        # Determine target channel with fallback logic
         if channel_id:
             channel = guild.get_channel(channel_id)
+            if not channel:
+                # Daily report channel was deleted, fallback to CMI channel
+                channel_id_from_settings = get_cmi_channel_id(guild_id)
+                channel = guild.get_channel(channel_id_from_settings) if channel_id_from_settings else None
         else:
             channel_id_from_settings = get_cmi_channel_id(guild_id)
             channel = guild.get_channel(channel_id_from_settings) if channel_id_from_settings else None
-
+        
+        # If still no channel, try to find first accessible text channel
         if not channel:
+            for ch in guild.text_channels:
+                if ch.permissions_for(guild.me).send_messages:
+                    channel = ch
+                    # Notify leadership about fallback
+                    try:
+                        await ch.send(
+                            "⚠️ **Leadership Notice**: The configured CMI/daily report channel was deleted. "
+                            f"Using {ch.mention} as fallback. Please reconfigure channels with `/cmi leadership`."
+                        )
+                    except Exception:
+                        pass
+                    break
+        
+        if not channel:
+            logging.warning(f"No accessible channel found for daily report in {guild.name}")
             continue
 
         # Generate and send report
@@ -1740,8 +1795,11 @@ class SetUserTimezoneModal(discord.ui.Modal, title="Set My Timezone"):
 
         if not iana:
             return await interaction.response.send_message(
-                "❌ I couldn't recognize that timezone.\n"
-                "Try something like `Pacific/Auckland`, `Australia/Sydney`, `NZT`, or `AEST`.",
+                f"❌ **Invalid timezone**: `{tz_text}`\n\n"
+                "Please use a valid timezone format:\n"
+                "• IANA format: `Pacific/Auckland`, `Australia/Sydney`, `America/New_York`\n"
+                "• Common abbreviations: `NZT`, `AEST`, `UTC`, `EST`, `PST`\n\n"
+                "**Defaulting to server timezone for now.** You can set your timezone again anytime.",
                 ephemeral=True,
             )
 
@@ -1782,8 +1840,11 @@ class SetServerTimezoneModal(discord.ui.Modal, title="Set Server Timezone"):
 
         if not iana:
             return await interaction.response.send_message(
-                "❌ I couldn't recognize that timezone.\n"
-                "Please use a valid timezone like `Australia/Sydney`, `Pacific/Auckland`, `NZT`, or `AEST`.",
+                f"❌ **Invalid timezone**: `{tz_text}`\n\n"
+                "Please use a valid timezone format:\n"
+                "• IANA format: `Pacific/Auckland`, `Australia/Sydney`, `America/New_York`\n"
+                "• Common abbreviations: `NZT`, `AEST`, `UTC`, `EST`, `PST`\n\n"
+                "Server timezone was not changed.",
                 ephemeral=True,
             )
 
@@ -3884,6 +3945,17 @@ class CMI(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.active_views = {}  # Prevent ephemeral view GC
+    
+    async def cog_check(self, ctx):
+        """This runs before all commands in this cog."""
+        return True
+    
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Check cooldown before processing interactions, but bypass for leadership."""
+        # Check if user is leadership (bypass cooldown)
+        if await is_leadership(interaction):
+            return True
+        return True
 
     # Helper to build continue button view (shared by handlers)
     def _make_continue_view(self, target_member: discord.Member, for_perms: bool = False):
@@ -5774,6 +5846,7 @@ class CMI(commands.Cog):
     # --------------------------------------------------------
 
     @app_commands.command(name="cmi", description="Open the CMI menu.")
+    @app_commands.checks.cooldown(5, 30, key=lambda i: i.user.id)
     async def cmi_command(self, interaction: discord.Interaction):
         if not interaction.guild:
             return await interaction.response.send_message(
@@ -5788,6 +5861,10 @@ class CMI(commands.Cog):
             return
 
         is_lead = await is_leadership(interaction)
+        
+        # Reset cooldown for leadership users
+        if is_lead:
+            self.cmi_command.reset_cooldown(interaction)
 
         embed = build_main_menu_embed(
             guild=interaction.guild,
@@ -5900,7 +5977,29 @@ async def setup(bot: commands.Bot):
 
 
 # ============================================================
-# Section 11C — Health Check HTTP Server
+# Section 11C — Error Handlers
+# ============================================================
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    """Handle application command errors."""
+    if isinstance(error, app_commands.CommandOnCooldown):
+        await interaction.response.send_message(
+            f"⏱️ **Slow down!** You can use this command again in {error.retry_after:.1f} seconds.\n"
+            "This helps prevent spam and keeps the bot running smoothly.",
+            ephemeral=True
+        )
+    else:
+        # Log other errors
+        logging.error(f"Command error: {error}")
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "❌ An error occurred while processing your command.",
+                ephemeral=True
+            )
+
+# ============================================================
+# Section 11D — Health Check HTTP Server
 # ============================================================
 
 class HealthCheckHandler(BaseHTTPRequestHandler):
